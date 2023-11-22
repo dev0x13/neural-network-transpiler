@@ -69,6 +69,10 @@ std::string DumpGraph::TensorType(const Tensor& tensor) {
       return std::string("UINT8");
       break;
 
+    case TensorType::INT8:
+      return std::string("INT8");
+      break;
+
     case TensorType::INT64:
       return std::string("INT64");
       break;

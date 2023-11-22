@@ -53,6 +53,7 @@ enum class TensorType: int8_t {
   FLOAT16,
   INT32,
   UINT8,
+  INT8,
   INT64,
   STRING,
 #ifdef NEWER_TENSORFLOW
@@ -155,7 +156,7 @@ enum class BuiltinOptionsType {
   BatchToSpaceNDOptions,
   SpaceToBatchNDOptions,
   TransposeOptions,
-  MeanOptions,
+  ReducerOptions,
   SubOptions,
   DivOptions,
   SqueezeOptions,
@@ -424,8 +425,8 @@ struct ExpOptions: public BuiltinOptions {
   ExpOptions(): BuiltinOptions(BuiltinOptionsType::ExpOptions) {}
 };
 
-struct MeanOptions: public BuiltinOptions {
-  MeanOptions(): BuiltinOptions(BuiltinOptionsType::MeanOptions) {}
+struct ReducerOptions: public BuiltinOptions {
+  ReducerOptions(): BuiltinOptions(BuiltinOptionsType::ReducerOptions) {}
 
   bool keep_dims;
 };
@@ -639,6 +640,10 @@ class Graph {
     return tensors_;
   }
 
+  std::vector<Tensor>& Tensors() {
+    return tensors_;
+  }
+
   const std::vector<Operator>& Operators() const {
     return operators_;
   }
@@ -774,7 +779,7 @@ class Model {
   std::unique_ptr<TransposeOptions> MakeTransposeOptions(
       const tflite::Operator* op);
 
-  std::unique_ptr<MeanOptions> MakeMeanOptions(const tflite::Operator* op);
+  std::unique_ptr<ReducerOptions> MakeReducerOptions(const tflite::Operator* op);
 
   std::unique_ptr<SqueezeOptions> MakeSqueezeOptions(
       const tflite::Operator* op);

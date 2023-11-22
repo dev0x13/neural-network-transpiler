@@ -66,6 +66,10 @@ TensorType Model::ConvertTensorType(tflite::TensorType type) {
       return TensorType::UINT8;
       break;
 
+    case tflite::TensorType_INT8:
+      return TensorType::INT8;
+      break;
+
     case tflite::TensorType_INT64:
       return TensorType::INT64;
       break;
@@ -555,12 +559,12 @@ std::unique_ptr<TransposeOptions> Model::MakeTransposeOptions(
   return option;
 }
 
-std::unique_ptr<MeanOptions> Model::MakeMeanOptions(
+std::unique_ptr<ReducerOptions> Model::MakeReducerOptions(
     const tflite::Operator* op) {
-  auto p = reinterpret_cast<const tflite::MeanOptions*>(
+  auto p = reinterpret_cast<const tflite::ReducerOptions*>(
       op->builtin_options());
 
-  std::unique_ptr<MeanOptions> option = std::make_unique<MeanOptions>();
+  std::unique_ptr<ReducerOptions> option = std::make_unique<ReducerOptions>();
 
   option->keep_dims = p->keep_dims();
 
@@ -783,8 +787,8 @@ std::unique_ptr<BuiltinOptions> Model::HandleBuiltinOptions(
       return MakeTransposeOptions(op);
       break;
 
-    case tflite::BuiltinOptions_MeanOptions:
-      return MakeMeanOptions(op);
+    case tflite::BuiltinOptions_ReducerOptions:
+      return MakeReducerOptions(op);
       break;
 
     case tflite::BuiltinOptions_SubOptions:
@@ -816,6 +820,38 @@ void Model::PopulateGraphOperators(const tflite::SubGraph* graph) {
   for (auto it = operators->begin(); it != operators->end(); ++it) {
     std::vector<int> vec_ins = AssignVector<int>(it->inputs());
     std::vector<int> vec_outs = AssignVector<int>(it->outputs());
+
+    for (size_t idx = 0; idx < vec_ins.size(); ++idx) {
+        if (vec_ins[idx] == -1) {  // optional bias tensor
+            // TODO: assert size
+            const int filter_tensor_idx = vec_ins[1];
+            const auto& filter_tensor = graph_.Tensors()[filter_tensor_idx];
+            const int num_units = filter_tensor.shape()[0];
+            std::vector<int> zero_bias_shape = {num_units};
+            std::vector<u_char> zero_bias_buffer(num_units * sizeof(int32_t), 0);
+            buffers_.emplace_back(std::move(zero_bias_buffer));
+            const Buffer& buffer = buffers_.back();
+            const size_t buffer_idx = buffers_.size() - 1;
+
+            const int input_tensor_idx = vec_ins[0];
+            const auto& input_tensor = graph_.Tensors()[input_tensor_idx];
+            const TensorType input_type = input_tensor.tensor_type();
+
+            std::unique_ptr<QuantizationParameters> quantization_ptr(new QuantizationParameters);
+            if (input_type != TensorType::FLOAT32) {
+                quantization_ptr->min = {};
+                quantization_ptr->max = {};
+                // TODO: add assert
+                quantization_ptr->scale = {input_tensor.quantization().scale[0] * filter_tensor.quantization().scale[0]};
+                quantization_ptr->zero_point = {0};
+            }
+
+            TensorType type = input_type == TensorType::FLOAT32 ? TensorType::FLOAT32 : TensorType::INT32;
+            graph_.AddTensor(Tensor(std::move(zero_bias_shape), type, "zero_bias", buffer,
+                                              buffer_idx, std::move(quantization_ptr)));
+            vec_ins[idx] = graph_.Tensors().size() - 1;
+        }
+    }
 
     std::string opt_str = tflite::EnumNamesBuiltinOptions()[static_cast<int>(
         it->builtin_options_type())];

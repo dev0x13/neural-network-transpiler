@@ -49,6 +49,11 @@ std::string ModelGen::TensorTypeStr(TensorType type) {
       return "ANEURALNETWORKS_TENSOR_QUANT8_ASYMM";
       break;
 
+    case TensorType::INT8:
+      // TODO: add re-quantization
+      return "ANEURALNETWORKS_TENSOR_QUANT8_ASYMM_SIGNED";
+      break;
+
     default:
       FATAL("Tensor type not valid for Android NNAPI")
   }
@@ -130,7 +135,11 @@ std::string ModelGen::GenerateTensorType(const Tensor& tensor, int count) {
 
   ss.precision(7);
   if (scale == 0) {
-    ss << "  .scale = 1.0f,\n";
+    if (tensor.tensor_type() == TensorType::FLOAT32) {
+      ss << "  .scale = 0.0f,\n";
+    } else {
+      ss << "  .scale = 1.0f,\n";
+    }
   } else{
     ss << "  .scale = " << scale << "f,\n";
   }
@@ -291,6 +300,14 @@ std::string ModelGen::OpTypeStr(BuiltinOperator op_type) {
 
     case BuiltinOperator::LSTM:
       return "ANEURALNETWORKS_LSTM";
+      break;
+
+    case BuiltinOperator::PAD:
+      return "ANEURALNETWORKS_PAD";
+      break;
+
+    case BuiltinOperator::MEAN:
+      return "ANEURALNETWORKS_MEAN";
       break;
 
     default:
@@ -581,7 +598,11 @@ std::string ModelGen::GenerateOutputFunctions() {
     const Tensor& tensor = graph.Tensors()[i];
     int size = TensorSize(tensor);
 
-    str_output += "  int status = ANeuralNetworksExecution_setOutput(run, " +
+    str_output += "  ";
+    if (cnt == 0) {
+      str_output += "int ";
+    }
+    str_output += "status = ANeuralNetworksExecution_setOutput(run, " +
         std::to_string(cnt++) + ", NULL, &buffer[" + std::to_string(start) +
         "], " + std::to_string(size) + ");\n";
 
