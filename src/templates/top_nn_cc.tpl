@@ -5,7 +5,6 @@
 #include <fcntl.h>\n\
 #include <android/log.h>\n\
 #include <android/NeuralNetworks.h>\n\
-#include <string>\n\
 \n\
 #include \"nn.h\"\n\
 \n\
@@ -67,20 +66,23 @@ bool Compile(int32_t preference) {\n\
                         \"ANeuralNetworksMemory_createFromFd failed\");\n\
     return false;\n\
   }\n\
+  status = ANeuralNetworksCompilation_finish(compilation);\n\
+  if (status != ANEURALNETWORKS_NO_ERROR) {\n\
+      __android_log_print(ANDROID_LOG_ERROR, LOG_TAG,\n\
+                          \"ANeuralNetworksCompilation_finish failed\");\n\
+      return false;\n\
+  }\n\
+  status = ANeuralNetworksExecution_create(compilation, &run);\n\
+  if (status != ANEURALNETWORKS_NO_ERROR) {\n\
+      __android_log_print(ANDROID_LOG_ERROR, LOG_TAG,\n\
+                          \"ANeuralNetworksMemory_createFromFd failed\");\n\
+      return false;\n\
+  }\n\
 \n\
   return true;\n\
 }\n\
 \n\
-\n\
 bool Execute() {\n\
-  int status = ANeuralNetworksExecution_create(compilation, &run);\n\
-\n\
-    if (status != ANEURALNETWORKS_NO_ERROR) {\n\
-      __android_log_print(ANDROID_LOG_ERROR, LOG_TAG,\n\
-                          \"ANeuralNetworksMemory_createFromFd failed\");\n\
-      return false;\n\
-    }\n\
-\n\
   ANeuralNetworksEvent* run_end = NULL;\n\
   ANeuralNetworksExecution_startCompute(run, &run_end);\n\
   ANeuralNetworksEvent_wait(run_end);\n\
